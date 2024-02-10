@@ -6,6 +6,8 @@ require("hardhat-gas-reporter");
 require("hardhat-contract-sizer");
 require("@nomicfoundation/hardhat-network-helpers");
 require("dotenv").config();
+require("fhenix-hardhat-plugin");
+require("fhenix-hardhat-docker");
 
 const RPC_URL_Alchemy_SEPOLIA = process.env.RPC_URL_Alchemy_SEPOLIA;
 const Private_Key = process.env.Private_Key;
@@ -54,14 +56,14 @@ module.exports = {
       url: "http://127.0.0.1:8545",
       timeout: 100000,
     },
-    localfhenix: {
-      // pubkey1 : 0x0319069ca5e383e40d6d19fb3e76e8b22b91cf4b0df661850c8e1de01624ab1d10
-      accounts: ["0x6ce6cbc11dea3db360b9c6e9ae229e2c17ef9104fecedb552f0e4e7da6b80af0"],
-      // accounts:{ mnemonic : Mnemonic},
-      chainId: 5432,
-      url: "http://localhost:8545",
-      timeout: 100000,
-    },
+    // localfhenix: {
+    //   // pubkey1 : 0x0319069ca5e383e40d6d19fb3e76e8b22b91cf4b0df661850c8e1de01624ab1d10
+    //   accounts: ["0x6ce6cbc11dea3db360b9c6e9ae229e2c17ef9104fecedb552f0e4e7da6b80af0"],
+    //   // accounts:{ mnemonic : Mnemonic},
+    //   chainId: 5432,
+    //   url: "http://localhost:8545",
+    //   timeout: 100000,
+    // },
     fhenix: {
       url: "https://test01.fhenix.zone/evm",
       chainId: 412346,
