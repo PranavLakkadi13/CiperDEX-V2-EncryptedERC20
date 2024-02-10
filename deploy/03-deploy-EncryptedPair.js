@@ -8,11 +8,11 @@ const { network, ethers } = require("hardhat");
 module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deployer } = await getNamedAccounts();
   const { deploy, log } = deployments;
-  // const chainId = network.config.chainId;
+//   const chainId = network.config.chainId;
 
-  const args = ["BITCOIN","BTC"];
+  const args = [];
 
-  const MockBTC = await deploy("EncryptedERC20", {
+  const EncryptedPair = await deploy("EncryptedPair", {
     from: deployer,
     // in this contract, we can choose our initial price since it is a mock
     args: args, // --> constructor args
@@ -30,8 +30,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   log("---------------------------------------------------");
 
   log("----------------------------------------------");
-  log("MockBTC Deployed!!!!!!!");
+  log("EncryptedPair Deployed!!!!!!!");
   log("-----------------------------------------------");
 };
 
-module.exports.tags = ["all", "MockBTC"];
+module.exports.tags = ["all", "EncryptedPair"];

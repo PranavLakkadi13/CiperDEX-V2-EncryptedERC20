@@ -6,7 +6,7 @@ import "./IEncryptedERC20.sol";
 import "@fhenixprotocol/contracts/access/Permissioned.sol";
 
 contract EncryptedPair is Permissioned {
-    using FHE for euint32;
+    // using FHE for euint32;
     // IERC20 public token0;
     IEncryptedERC20 public token0;
     // IERC20 public token1;
@@ -47,8 +47,8 @@ contract EncryptedPair is Permissioned {
     // }
 
     function _mint(address _to, euint32 _amount) private {
-        balances[_to] = balances[_to] + (_amount);
-        totalSupply = totalSupply + (_amount);
+        balances[_to] = FHE.add(balances[_to],_amount);
+        totalSupply = FHE.add(totalSupply,_amount);
     }
 
     // function _burn(address _from, uint _amount) private {
@@ -56,10 +56,21 @@ contract EncryptedPair is Permissioned {
     //     totalSupply -= _amount;
     // }
 
+    function _burn(address _from, euint32 _amount) private {
+        balances[_from] = FHE.sub(balances[_from],_amount);
+        totalSupply = FHE.sub(totalSupply,_amount);
+    }
+
     // function _update(uint _reserve0, uint _reserve1) private {
     //     reserve0 = _reserve0;
     //     reserve1 = _reserve1;
     // }
+
+    function _update(euint32 _reserve0, euint32 _reserve1) private {
+        reserve0 = _reserve0;
+        reserve1 = _reserve1;
+    }
+
 
     // function swap(address _tokenIn, euint calldata _amountIn) external returns (uint amountOut) {
     //     // euint32 x = TFHE.asEuint32(_amountIn);
@@ -88,6 +99,30 @@ contract EncryptedPair is Permissioned {
 
     //     _update(token0.balanceOf(address(this)), token1.balanceOf(address(this)));
     // }
+
+    function swap(address _tokenIn, inEuint32 calldata _amountIn) public returns (euint32 amountOut){
+        require(
+            _tokenIn == address(token0) || _tokenIn == address(token1),
+            "invalid token"
+        );
+
+        bool isToken0 = _tokenIn == address(token0);
+        (IEncryptedERC20 tokenIn, IEncryptedERC20 tokenOut, euint32 reserveIn, euint32 reserveOut) = isToken0
+            ? (token0, token1, reserve0, reserve1)
+            : (token1, token0, reserve1, reserve0);
+
+        euint32 amountIn = FHE.asEuint32(_amountIn);
+
+        tokenIn.transferFrom(msg.sender, address(this), amountIn);
+
+        euint32 amountInWithFee = FHE.div(FHE.mul(amountIn, FHE.asEuint32(997)), FHE.asEuint32(1000));
+
+        amountOut = FHE.div(FHE.mul(reserveOut,amountInWithFee), FHE.add(reserveIn, amountInWithFee));
+
+        tokenOut.transfer(msg.sender, amountOut);
+
+        _update(token0.EuintbalanceOf(address(this)),token1.EuintbalanceOf(address(this)));
+    }
 
     // function addLiquidity(inEuint32 calldata _amount0, inEuint32 calldata _amount1) external returns (uint shares) {
     //     // euint32 x = TFHE.asEuint32(_amount0);
@@ -122,6 +157,36 @@ contract EncryptedPair is Permissioned {
     //     _update(token0.balanceOf(address(this)), token1.balanceOf(address(this)));
     // }
 
+    function addLiquidity(inEuint32 calldata _amount0,inEuint32 calldata _amount1) public returns(euint32 shares) {
+        euint32 amount0 = FHE.asEuint32(_amount0);
+        euint32 amount1 = FHE.asEuint32(_amount1);
+
+        bool t0 = token0.transferFrom(msg.sender, address(this), amount0);
+        bool t1 = token1.transferFrom(msg.sender, address(this), amount1);
+
+        require(t0 && t1);
+
+        if (FHE.decrypt(reserve0.gt(FHE.asEuint32(0))) || FHE.decrypt(reserve1.gt(FHE.asEuint32(0)))) {
+            FHE.req(FHE.eq(FHE.mul(reserve0, amount0),FHE.mul(reserve1,amount1)));
+        }
+
+        if (FHE.decrypt(FHE.gt(totalSupply,FHE.asEuint32(0)))) {
+            shares = _sqrt(FHE.mul(amount0, amount1));
+        }
+        else {
+            euint32 x = FHE.div(FHE.mul(amount0,totalSupply),reserve0);
+            euint32 y = FHE.div(FHE.mul(amount1,totalSupply),reserve1);
+
+            shares = _min(x, y);
+        }
+
+        FHE.req(FHE.gt(shares,FHE.asEuint32(0)));
+
+        _mint(msg.sender, shares);
+
+        _update(token0.EuintbalanceOf(address(this)), token1.EuintbalanceOf(address(this)));
+    }
+
     // function removeLiquidity(
     //     inEuint32 calldata _shares
     // ) external returns (uint amount0, uint amount1) {
@@ -153,12 +218,13 @@ contract EncryptedPair is Permissioned {
         euint32 bal0 = token0.EuintbalanceOf(address(this));
         euint32 bal1 = token1.EuintbalanceOf(address(this));
 
-        amount0 = (shares.mul(bal0)).div(totalSupply);
-        amount1 = (shares.mul(bal1)).div(totalSupply);
+        amount0 = FHE.div((FHE.mul(shares,bal0)),totalSupply);
+        amount1 = FHE.div((FHE.mul(shares,bal1)),totalSupply);
 
-        FHE.req(FHE.and(amount0.gt(FHE.asEuint32(0)), amount1.gt(FHE.asEuint32(0))));
+        FHE.req(FHE.and(FHE.gt(amount0,FHE.asEuint32(0)), FHE.gt(amount1,FHE.asEuint32(0))));
 
-        
+        _burn(msg.sender, shares);
+        _update(bal0 - amount0, bal1 - amount1);
         
         token0.transfer(msg.sender, amount0);
         token1.transfer(msg.sender, amount1);
@@ -178,21 +244,21 @@ contract EncryptedPair is Permissioned {
     // }
 
     function _sqrt(euint32 y) private pure returns (euint32 z) { 
-        if (FHE.decrypt(y.gte(FHE.asEuint32(3)))) {
+        if (FHE.decrypt(FHE.gt(y,FHE.asEuint32(3)))) {
             z = y;
-            euint32 x = (y.div(FHE.asEuint32(2))) + FHE.asEuint32(1);
-            while (FHE.decrypt(x.lte(z))) {
+            euint32 x = FHE.add((FHE.div(y,FHE.asEuint32(2))),FHE.asEuint32(1));
+            while (FHE.decrypt(FHE.lt(x,z))) {
                 z = x;
-                x = (y.div(x + x)).div(FHE.asEuint32(2));
+                x = FHE.div((FHE.div(y,FHE.add(x,x))),FHE.asEuint32(2));
             }
         }
-        else if (FHE.decrypt(y.ne(FHE.asEuint32(0)))) {
+        else if (FHE.decrypt(FHE.ne(y,FHE.asEuint32(0)))) {
             z = FHE.asEuint32(1);
         }
     }
 
     function _min(euint32 x, euint32 y) private pure returns (euint32) {
-        if (FHE.decrypt(x.lte(y))) {
+        if (FHE.decrypt(FHE.lte(x, y))) {
             return x;
         }
         else {
