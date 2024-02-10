@@ -35,6 +35,10 @@ interface IEncryptedERC20 {
         Permission calldata permission
     ) external view returns (bytes memory) ;
 
+    function EuintbalanceOf(
+        address wallet
+    ) external view returns (euint32) ;
+
     // Sets the `encryptedAmount` as the allowance of `spender` over the caller's tokens.
     function approve(address spender, inEuint32 calldata encryptedAmount) external returns (bool) ;
 

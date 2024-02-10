@@ -6,7 +6,7 @@ import "./IEncryptedERC20.sol";
 import "@fhenixprotocol/contracts/access/Permissioned.sol";
 
 contract EncryptedPair is Permissioned {
-
+    using FHE for euint32;
     // IERC20 public token0;
     IEncryptedERC20 public token0;
     // IERC20 public token1;
@@ -15,25 +15,41 @@ contract EncryptedPair is Permissioned {
     address public factory;
 
     // uint256 public reserve0;
+    euint32 public reserve0;
     // uint256 public reserve1;
+    euint32 public reserve1; 
 
     // uint public totalSupply;
+    euint32 public totalSupply;
     // mapping(address => uint256) public balanceOf;
+    mapping(address => euint32) private balances;
 
-    // constructor() {
-    //     factory = msg.sender;
-    // }
+    constructor() {
+        factory = msg.sender;
+    }
 
-    // function initialize(address _token0, address _token1) external {
-    //     require(msg.sender == factory, 'Only Factory can call this'); // sufficient check
-    //     token0 = IERC20(_token0);
-    //     token1 = IERC20(_token1);
-    // }
+    function balanceOf(
+        address wallet,
+        Permission calldata permission
+    ) public view virtual onlySender(permission) returns (bytes memory) {
+            return FHE.sealoutput(balances[wallet], permission.publicKey);
+    }
+
+    function initialize(address _token0, address _token1) external {
+        require(msg.sender == factory, 'Only Factory can call this'); // sufficient check
+        token0 = IEncryptedERC20(_token0);
+        token1 = IEncryptedERC20(_token1);
+    }
 
     // function _mint(address _to, uint _amount) private {
     //     balanceOf[_to] += _amount;
     //     totalSupply += _amount;
     // }
+
+    function _mint(address _to, euint32 _amount) private {
+        balances[_to] = balances[_to] + (_amount);
+        totalSupply = totalSupply + (_amount);
+    }
 
     // function _burn(address _from, uint _amount) private {
     //     balanceOf[_from] -= _amount;
@@ -128,6 +144,26 @@ contract EncryptedPair is Permissioned {
     //     token1.transfer(msg.sender, amount1);
     // }
 
+    function removeLiquidity(
+            inEuint32 calldata _shares
+    ) external returns (euint32 amount0, euint32 amount1) {
+    
+        euint32 shares = FHE.asEuint32(_shares);
+
+        euint32 bal0 = token0.EuintbalanceOf(address(this));
+        euint32 bal1 = token1.EuintbalanceOf(address(this));
+
+        amount0 = (shares.mul(bal0)).div(totalSupply);
+        amount1 = (shares.mul(bal1)).div(totalSupply);
+
+        FHE.req(FHE.and(amount0.gt(FHE.asEuint32(0)), amount1.gt(FHE.asEuint32(0))));
+
+        
+        
+        token0.transfer(msg.sender, amount0);
+        token1.transfer(msg.sender, amount1);
+    }
+
     // function _sqrt(uint y) private pure returns (uint z) {
     //     if (y > 3) {
     //         z = y;
@@ -141,7 +177,26 @@ contract EncryptedPair is Permissioned {
     //     }
     // }
 
-    // function _min(uint x, uint y) private pure returns (uint) {
-    //     return x <= y ? x : y;
-    // }
+    function _sqrt(euint32 y) private pure returns (euint32 z) { 
+        if (FHE.decrypt(y.gte(FHE.asEuint32(3)))) {
+            z = y;
+            euint32 x = (y.div(FHE.asEuint32(2))) + FHE.asEuint32(1);
+            while (FHE.decrypt(x.lte(z))) {
+                z = x;
+                x = (y.div(x + x)).div(FHE.asEuint32(2));
+            }
+        }
+        else if (FHE.decrypt(y.ne(FHE.asEuint32(0)))) {
+            z = FHE.asEuint32(1);
+        }
+    }
+
+    function _min(euint32 x, euint32 y) private pure returns (euint32) {
+        if (FHE.decrypt(x.lte(y))) {
+            return x;
+        }
+        else {
+            return y;
+        }
+    }
 }
